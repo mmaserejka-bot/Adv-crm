@@ -1,0 +1,58 @@
+name: Build Advokat CRM APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '**.zip'
+      - '.github/workflows/build.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Find CRM ZIP
+        run: |
+          ZIP=$(find . -maxdepth 2 -type f -name "*.zip" | head -n 1)
+
+          if [ -z "$ZIP" ]; then
+            echo "CRM ZIP not found"
+            exit 1
+          fi
+
+          echo "Using: $ZIP"
+          mkdir project
+          unzip -q "$ZIP" -d project
+
+      - name: Find Gradle project
+        run: |
+          ROOT=$(find project -name "settings.gradle.kts" -o -name "settings.gradle" | head -n 1)
+
+          if [ -z "$ROOT" ]; then
+            echo "Gradle project not found"
+            find project -maxdepth 3 -type f | head -100
+            exit 1
+          fi
+
+          DIR=$(dirname "$ROOT")
+          echo "PROJECT_DIR=$DIR" >> "$GITHUB_ENV"
+          echo "Project: $DIR"
+
+      - name: Make gradlew executable
+        run: |
+          chmod +x "$PROJECT_DIR/gradlew"
+
+      - name: Build APK
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: ./gradlew --no-daemon assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: advokat-crm-debug-apk
+          path: |
+            ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk
